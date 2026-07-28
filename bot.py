@@ -1,0 +1,57 @@
+import asyncio
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler
+)
+from config import config, logger
+from database import init_db
+from scheduler import setup_scheduler
+from handlers.start import start_handler
+from handlers.help import help_handler
+from handlers.planner import task_command_handler
+from handlers.habits import habit_command_handler
+from handlers.reminders import reminder_command_handler
+from handlers.statistics import stats_handler
+from handlers.calendar import calendar_handler
+from handlers.settings import settings_handler
+from handlers.profile import profile_handler
+
+async def callback_router(update, context):
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "show_stats":
+        await stats_handler(update, context)
+    elif query.data == "show_calendar":
+        await calendar_handler(update, context)
+    elif query.data == "show_settings":
+        await settings_handler(update, context)
+
+def main():
+    logger.info("Initializing database...")
+    asyncio.run(init_db())
+
+    logger.info("Building Telegram Application...")
+    app = ApplicationBuilder().token(config.BOT_TOKEN).build()
+
+    # Register Command Handlers
+    app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CommandHandler("help", help_handler))
+    app.add_handler(CommandHandler("tasks", task_command_handler))
+    app.add_handler(CommandHandler("habit", habit_command_handler))
+    app.add_handler(CommandHandler("remind", reminder_command_handler))
+    app.add_handler(CommandHandler("stats", stats_handler))
+    app.add_handler(CommandHandler("calendar", calendar_handler))
+    app.add_handler(CommandHandler("settings", settings_handler))
+    app.add_handler(CommandHandler("profile", profile_handler))
+    
+    # Register Callback Query Router
+    app.add_handler(CallbackQueryHandler(callback_router))
+
+    # Initialize Background Scheduler
+    setup_scheduler(app)
+
+    logger.info("Bot is starting polling...")
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
