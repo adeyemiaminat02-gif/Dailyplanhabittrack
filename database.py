@@ -1,3 +1,4 @@
+import os
 import enum
 from datetime import datetime
 from typing import Optional, List
@@ -8,18 +9,25 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from config import config
 
+# Ensure data directory exists for SQLite
+os.makedirs("./data", exist_ok=True)
+
+
 class PriorityEnum(str, enum.Enum):
     HIGH = "High"
     MEDIUM = "Medium"
     LOW = "Low"
+
 
 class HabitFrequencyEnum(str, enum.Enum):
     DAILY = "Daily"
     WEEKLY = "Weekly"
     CUSTOM = "Custom"
 
+
 class Base(DeclarativeBase):
     pass
+
 
 class User(Base):
     __tablename__ = "users"
@@ -39,6 +47,7 @@ class User(Base):
     habits: Mapped[List["Habit"]] = relationship("Habit", back_populates="user", cascade="all, delete-orphan")
     reminders: Mapped[List["Reminder"]] = relationship("Reminder", back_populates="user", cascade="all, delete-orphan")
 
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -55,6 +64,7 @@ class Task(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="tasks")
 
+
 class Habit(Base):
     __tablename__ = "habits"
 
@@ -62,7 +72,7 @@ class Habit(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.telegram_id"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     frequency: Mapped[HabitFrequencyEnum] = mapped_column(Enum(HabitFrequencyEnum), default=HabitFrequencyEnum.DAILY)
-    custom_days: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # e.g. "0,2,4" for Mon,Wed,Fri
+    custom_days: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     is_paused: Mapped[bool] = mapped_column(Boolean, default=False)
     current_streak: Mapped[int] = mapped_column(Integer, default=0)
     longest_streak: Mapped[int] = mapped_column(Integer, default=0)
@@ -72,15 +82,17 @@ class Habit(Base):
     user: Mapped["User"] = relationship("User", back_populates="habits")
     logs: Mapped[List["HabitLog"]] = relationship("HabitLog", back_populates="habit", cascade="all, delete-orphan")
 
+
 class HabitLog(Base):
     __tablename__ = "habit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     habit_id: Mapped[int] = mapped_column(Integer, ForeignKey("habits.id"), index=True)
-    action: Mapped[str] = mapped_column(String(20)) # completed, skipped
+    action: Mapped[str] = mapped_column(String(20))
     logged_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     habit: Mapped["Habit"] = relationship("Habit", back_populates="logs")
+
 
 class Reminder(Base):
     __tablename__ = "reminders"
@@ -88,15 +100,17 @@ class Reminder(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.telegram_id"), index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    reminder_type: Mapped[str] = mapped_column(String(50), default="Custom") # Task, Habit, Meeting, Birthday, Custom
-    recurrence: Mapped[str] = mapped_column(String(20), default="once") # once, daily, weekly, monthly
+    reminder_type: Mapped[str] = mapped_column(String(50), default="Custom")
+    recurrence: Mapped[str] = mapped_column(String(20), default="once")
     remind_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     is_sent: Mapped[bool] = mapped_column(Boolean, default=False)
 
     user: Mapped["User"] = relationship("User", back_populates="reminders")
 
+
 engine = create_async_engine(config.DATABASE_URL, echo=False, future=True)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
 
 async def init_db():
     async with engine.begin() as conn:
