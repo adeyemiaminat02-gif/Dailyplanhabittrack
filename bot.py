@@ -18,15 +18,9 @@ from telegram.ext import (
 
 from config import config, logger
 from database import init_db
-from handlers.calendar import calendar_handler
-from handlers.habits import habit_callback_handler, habit_command_handler
-from handlers.help import help_handler
-from handlers.planner import task_callback_handler, task_command_handler
-from handlers.profile import profile_handler
-from handlers.reminders import reminder_callback_handler, reminder_command_handler
-from handlers.settings import settings_handler
-from handlers.start import start_handler
-from handlers.statistics import stats_handler
+
+# Module imports
+from handlers import calendar, habits, help, planner, profile, reminders, settings, start, statistics
 from scheduler import start_scheduler, stop_scheduler
 
 
@@ -34,31 +28,37 @@ async def callback_router(update, context):
     """Route all inline keyboard callback queries to corresponding handler logic."""
     query = update.callback_query
     await query.answer()
-    data = query.data
+    data = query.data or ""
 
     logger.info(f"Received callback_data: {data} from user {update.effective_user.id}")
 
     # --- Navigation & Menus ---
     if data in ["show_stats", "stats"]:
-        await stats_handler(update, context)
+        await statistics.stats_handler(update, context)
     elif data in ["show_calendar", "calendar"]:
-        await calendar_handler(update, context)
+        await calendar.calendar_handler(update, context)
     elif data in ["show_settings", "settings"]:
-        await settings_handler(update, context)
+        await settings.settings_handler(update, context)
     elif data in ["show_profile", "profile"]:
-        await profile_handler(update, context)
+        await profile.profile_handler(update, context)
 
     # --- Tasks Dispatcher ---
-    elif data.startswith(("task_", "add_task", "view_tasks", "complete_task", "delete_task")):
-        await task_callback_handler(update, context)
+    elif any(data.startswith(prefix) for prefix in ["task_", "add_task", "view_tasks", "complete_task", "delete_task"]):
+        handler = getattr(planner, "task_callback_handler", getattr(planner, "task_command_handler", None))
+        if handler:
+            await handler(update, context)
 
     # --- Habits Dispatcher ---
-    elif data.startswith(("habit_", "add_habit", "view_habits", "log_habit", "complete_habit")):
-        await habit_callback_handler(update, context)
+    elif any(data.startswith(prefix) for prefix in ["habit_", "add_habit", "view_habits", "log_habit", "complete_habit"]):
+        handler = getattr(habits, "habit_callback_handler", getattr(habits, "habit_command_handler", None))
+        if handler:
+            await handler(update, context)
 
     # --- Reminders Dispatcher ---
-    elif data.startswith(("reminder_", "add_reminder", "view_reminders", "delete_reminder")):
-        await reminder_callback_handler(update, context)
+    elif any(data.startswith(prefix) for prefix in ["reminder_", "add_reminder", "view_reminders", "delete_reminder"]):
+        handler = getattr(reminders, "reminder_callback_handler", getattr(reminders, "reminder_command_handler", None))
+        if handler:
+            await handler(update, context)
 
     else:
         logger.warning(f"Unhandled callback pattern: {data}")
@@ -90,15 +90,15 @@ def main():
     )
 
     # Register Primary Command Handlers
-    app.add_handler(CommandHandler("start", start_handler))
-    app.add_handler(CommandHandler("help", help_handler))
-    app.add_handler(CommandHandler("tasks", task_command_handler))
-    app.add_handler(CommandHandler("habit", habit_command_handler))
-    app.add_handler(CommandHandler("remind", reminder_command_handler))
-    app.add_handler(CommandHandler("stats", stats_handler))
-    app.add_handler(CommandHandler("calendar", calendar_handler))
-    app.add_handler(CommandHandler("settings", settings_handler))
-    app.add_handler(CommandHandler("profile", profile_handler))
+    app.add_handler(CommandHandler("start", start.start_handler))
+    app.add_handler(CommandHandler("help", help.help_handler))
+    app.add_handler(CommandHandler("tasks", planner.task_command_handler))
+    app.add_handler(CommandHandler("habit", habits.habit_command_handler))
+    app.add_handler(CommandHandler("remind", reminders.reminder_command_handler))
+    app.add_handler(CommandHandler("stats", statistics.stats_handler))
+    app.add_handler(CommandHandler("calendar", calendar.calendar_handler))
+    app.add_handler(CommandHandler("settings", settings.settings_handler))
+    app.add_handler(CommandHandler("profile", profile.profile_handler))
 
     # Catch-all Callback Query Handler for Inline Buttons
     app.add_handler(CallbackQueryHandler(callback_router))
