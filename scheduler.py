@@ -28,8 +28,8 @@ async def check_and_send_reminders(app: Application) -> None:
         logger.error(f"Error executing reminder check loop: {e}")
 
 
-def setup_scheduler(app: Application) -> None:
-    """Initialize and start the APScheduler background loop."""
+async def start_scheduler(app: Application) -> None:
+    """Initialize and start the APScheduler background loop safely within an active event loop."""
     scheduler.add_job(
         check_and_send_reminders,
         trigger="interval",
@@ -39,4 +39,11 @@ def setup_scheduler(app: Application) -> None:
         replace_existing=True
     )
     scheduler.start()
-    logger.info("APScheduler initialized and running.")
+    logger.info("APScheduler initialized and running safely inside the event loop.")
+
+
+async def stop_scheduler(app: Application) -> None:
+    """Gracefully shutdown the scheduler when the bot stops."""
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+        logger.info("APScheduler shut down.")
