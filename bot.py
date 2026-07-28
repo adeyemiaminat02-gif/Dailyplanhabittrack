@@ -4,7 +4,6 @@ Sets up Python path resolution, initializes database, loads handlers, and starts
 """
 import sys
 import os
-import asyncio
 
 # Ensure project root directory is in sys.path to prevent ModuleNotFoundError on Render
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +15,7 @@ from telegram.ext import (
 )
 from config import config, logger
 from database import init_db
-from scheduler import setup_scheduler
+from scheduler import start_scheduler, stop_scheduler
 
 from handlers.start import start_handler
 from handlers.help import help_handler
@@ -42,12 +41,30 @@ async def callback_router(update, context):
         await settings_handler(update, context)
 
 
-def main():
+async def post_init(app) -> None:
+    """Runs after application build and inside the active event loop."""
     logger.info("Ensuring database schema exists...")
-    asyncio.run(init_db())
+    await init_db()
+    logger.info("Starting background scheduler...")
+    await start_scheduler(app)
 
+
+async def post_shutdown(app) -> None:
+    """Runs when the application is shutting down."""
+    logger.info("Shutting down background scheduler...")
+    await stop_scheduler(app)
+
+
+def main():
     logger.info("Building Telegram Application...")
-    app = ApplicationBuilder().token(config.BOT_TOKEN).build()
+    
+    app = (
+        ApplicationBuilder()
+        .token(config.BOT_TOKEN)
+        .post_init(post_init)
+        .post_shutdown(post_shutdown)
+        .build()
+    )
 
     # Register Primary Command Handlers
     app.add_handler(CommandHandler("start", start_handler))
@@ -62,9 +79,6 @@ def main():
     
     # Register Callback Handler
     app.add_handler(CallbackQueryHandler(callback_router))
-
-    # Initialize Background Scheduler
-    setup_scheduler(app)
 
     logger.info("Bot successfully initialized. Starting long polling loop...")
     app.run_polling(drop_pending_updates=True)
